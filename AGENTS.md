@@ -23,4 +23,3 @@
 - Go 코드는 `gofmt`를 적용한다.
 - 완료 전에 `make fmt`, `make build`, `make test`, `make snapshot`을 실행한다.
 - 인증 코드, 토큰, 사용자 코드, 브라우저 쿠키 및 내부 주소를 로그나 저장소에 남기지 않는다.
-

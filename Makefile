@@ -24,4 +24,3 @@ snapshot:
 
 clean:
 	rm -rf .tmp dist
-

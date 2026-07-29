@@ -108,4 +108,3 @@ jobs:
           for archive in imprun_*.zip; do
             test "$(unzip -Z1 "${archive}" | LC_ALL=C sort)" = "${expected_windows}"
           done
-
