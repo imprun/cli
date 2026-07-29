@@ -1,0 +1,143 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+      - name: Test
+        run: go test ./...
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Sign checksum bundle
+        shell: bash
+        run: |
+          cosign sign-blob \
+            --bundle dist/checksums.txt.sigstore.json \
+            dist/checksums.txt \
+            --yes
+          gh release upload "${GITHUB_REF_NAME}" \
+            dist/checksums.txt.sigstore.json \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  verify:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Download published release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern checksums.txt \
+            --pattern checksums.txt.sigstore.json \
+            --pattern 'imprun_*.tar.gz' \
+            --pattern 'imprun_*.zip'
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+      - name: Verify signature, checksums, and archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign verify-blob \
+            --bundle checksums.txt.sigstore.json \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/tags/${GITHUB_REF_NAME}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            checksums.txt
+          test "$(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)" -eq 6
+          sha256sum --check checksums.txt
+          expected="$(printf '%s\n' LICENSE README.md imprun | LC_ALL=C sort)"
+          expected_windows="$(printf '%s\n' LICENSE README.md imprun.exe | LC_ALL=C sort)"
+          for archive in imprun_*.tar.gz; do
+            test "$(tar -tzf "${archive}" | LC_ALL=C sort)" = "${expected}"
+          done
+          for archive in imprun_*.zip; do
+            test "$(unzip -Z1 "${archive}" | LC_ALL=C sort)" = "${expected_windows}"
+          done
+
+  host-smoke:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Download and smoke-test published CLI
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if test "${RUNNER_OS}" = "macOS"; then
+            platform=darwin
+            completion=zsh
+            marker=compdef
+          else
+            platform=linux
+            completion=bash
+            marker=complete
+          fi
+          gh release download "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern "imprun_*_${platform}_amd64.tar.gz"
+          archive="$(find . -maxdepth 1 -type f -name "imprun_*_${platform}_amd64.tar.gz" -print -quit)"
+          mkdir -p "${RUNNER_TEMP}/imprun-smoke"
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}/imprun-smoke"
+          "${RUNNER_TEMP}/imprun-smoke/imprun" --version
+          "${RUNNER_TEMP}/imprun-smoke/imprun" completion "${completion}" | grep -q "${marker}"
+      - name: Download and smoke-test published CLI
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${env:GITHUB_REF_NAME}" `
+            --repo "${env:GITHUB_REPOSITORY}" `
+            --pattern "imprun_*_windows_amd64.zip"
+          $archive = Get-ChildItem -File -Filter "imprun_*_windows_amd64.zip" | Select-Object -First 1
+          if (-not $archive) {
+            throw "published Windows archive is missing"
+          }
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath "${env:RUNNER_TEMP}\imprun-smoke"
+          & "${env:RUNNER_TEMP}\imprun-smoke\imprun.exe" --version
+          $completion = & "${env:RUNNER_TEMP}\imprun-smoke\imprun.exe" completion powershell
+          if (($completion -join "`n") -notmatch "Register-ArgumentCompleter") {
+            throw "PowerShell completion smoke failed"
+          }

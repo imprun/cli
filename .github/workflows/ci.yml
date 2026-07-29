@@ -1,0 +1,110 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify formatting
+        run: |
+          go fmt ./...
+          git diff --exit-code
+      - name: Test
+        run: go test -race ./...
+      - name: Build
+        run: go build -trimpath -o "${RUNNER_TEMP}/imprun" ./cmd/imprun
+      - name: Smoke
+        run: |
+          "${RUNNER_TEMP}/imprun" --version
+          "${RUNNER_TEMP}/imprun" completion bash | grep -q "complete"
+
+  windows:
+    name: windows
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test
+        run: go test ./...
+      - name: Build and smoke
+        shell: pwsh
+        run: |
+          go build -trimpath -o "${env:RUNNER_TEMP}\imprun.exe" ./cmd/imprun
+          & "${env:RUNNER_TEMP}\imprun.exe" --version
+          $completion = & "${env:RUNNER_TEMP}\imprun.exe" completion powershell
+          if (($completion -join "`n") -notmatch "Register-ArgumentCompleter") {
+            throw "PowerShell completion smoke failed"
+          }
+
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test
+        run: go test ./...
+      - name: Build and smoke
+        run: |
+          go build -trimpath -o "${RUNNER_TEMP}/imprun" ./cmd/imprun
+          "${RUNNER_TEMP}/imprun" --version
+          "${RUNNER_TEMP}/imprun" completion zsh | grep -q "compdef"
+
+  release-snapshot:
+    name: release snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean
+      - name: Verify snapshot archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          test "$(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)" -eq 6
+          sha256sum --check checksums.txt
+          expected="$(printf '%s\n' LICENSE README.md imprun | LC_ALL=C sort)"
+          expected_windows="$(printf '%s\n' LICENSE README.md imprun.exe | LC_ALL=C sort)"
+          for archive in imprun_*.tar.gz; do
+            test "$(tar -tzf "${archive}" | LC_ALL=C sort)" = "${expected}"
+          done
+          for archive in imprun_*.zip; do
+            test "$(unzip -Z1 "${archive}" | LC_ALL=C sort)" = "${expected_windows}"
+          done
