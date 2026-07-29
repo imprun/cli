@@ -1,0 +1,5 @@
+.serena/
+.tmp/
+dist/
+*.exe
+
