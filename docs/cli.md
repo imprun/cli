@@ -9,7 +9,7 @@ The client exposes high-level app, release, and Run workflows together with the 
 
 ## Install
 
-Tagged releases contain `imprun` archives for Windows, macOS, and Linux on amd64 and arm64. These are operator-host binaries and are unrelated to the architecture of a Kubernetes Cell image.
+Tagged releases contain `imprun` archives for Windows, macOS, and Linux on amd64 and arm64. Windows releases also publish direct portable `.exe` assets for package managers. These are operator-host binaries and are unrelated to the architecture of a Kubernetes Cell image.
 
 After the stable package is accepted into the Windows Package Manager community repository, install or upgrade it with:
 
@@ -18,11 +18,12 @@ winget install --id Imprun.CLI --exact
 winget upgrade --id Imprun.CLI --exact
 ```
 
-Until then, or for a pinned manual installation, extract the matching Windows ZIP and place `imprun.exe` on `PATH`:
+Until then, or for a pinned manual installation, download the matching direct Windows executable and place it on `PATH`:
 
 ```powershell
-Expand-Archive .\imprun_<VERSION>_windows_amd64.zip -DestinationPath .\imprun
-imprun\imprun.exe --version
+New-Item -ItemType Directory -Force .\imprun | Out-Null
+Copy-Item .\imprun_<VERSION>_windows_amd64.exe .\imprun\imprun.exe
+.\imprun\imprun.exe --version
 ```
 
 On macOS or Linux, extract the matching archive and install the executable in a directory on `PATH`:
@@ -49,10 +50,10 @@ sha256sum --check --ignore-missing checksums.txt
 Download and verify the new release exactly as for a fresh installation. Check the staged binary before replacing the installed executable:
 
 ```powershell
-Expand-Archive .\imprun_<NEW_VERSION>_windows_amd64.zip -DestinationPath .\imprun-new
-.\imprun-new\imprun.exe --version
+$stagedExecutable = ".\imprun_<NEW_VERSION>_windows_amd64.exe"
+& $stagedExecutable --version
 $installedDirectory = "C:\Tools\imprun"
-Copy-Item .\imprun-new\imprun.exe "$installedDirectory\imprun.exe.new"
+Copy-Item $stagedExecutable "$installedDirectory\imprun.exe.new"
 & "$installedDirectory\imprun.exe.new" --version
 Move-Item -Force "$installedDirectory\imprun.exe.new" "$installedDirectory\imprun.exe"
 imprun --version
