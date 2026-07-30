@@ -93,18 +93,38 @@ jobs:
           distribution: goreleaser
           version: "~> v2"
           args: release --snapshot --clean
-      - name: Verify snapshot archives
+      - name: Verify snapshot packages
         shell: bash
         run: |
           set -euo pipefail
-          cd dist
-          test "$(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)" -eq 6
-          sha256sum --check checksums.txt
+          test "$(find dist -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)" -eq 6
+          test "$(wc -l < dist/checksums.txt)" -eq 8
+          grep -E '\.(tar\.gz|zip)$' dist/checksums.txt | (
+            cd dist
+            sha256sum --check -
+          )
+          mapfile -t executables < <(
+            jq -r '
+              .[]
+              | select(.type == "Binary" and .extra.Format == "binary")
+              | [.name, .path, .goarch]
+              | @tsv
+            ' dist/artifacts.json
+          )
+          test "${#executables[@]}" -eq 2
+          for executable in "${executables[@]}"; do
+            IFS=$'\t' read -r name path arch <<< "${executable}"
+            [[ "${name}" =~ ^imprun_.+_windows_${arch}\.exe$ ]]
+            test -f "${path}"
+            expected_hash="$(awk -v name="${name}" '$2 == name { print $1 }' dist/checksums.txt)"
+            test -n "${expected_hash}"
+            test "$(sha256sum "${path}" | cut -d ' ' -f 1)" = "${expected_hash}"
+          done
           expected="$(printf '%s\n' LICENSE README.md imprun | LC_ALL=C sort)"
           expected_windows="$(printf '%s\n' LICENSE README.md imprun.exe | LC_ALL=C sort)"
-          for archive in imprun_*.tar.gz; do
+          for archive in dist/imprun_*.tar.gz; do
             test "$(tar -tzf "${archive}" | LC_ALL=C sort)" = "${expected}"
           done
-          for archive in imprun_*.zip; do
+          for archive in dist/imprun_*.zip; do
             test "$(unzip -Z1 "${archive}" | LC_ALL=C sort)" = "${expected_windows}"
           done

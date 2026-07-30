@@ -51,7 +51,8 @@ imprun auth login
 ## 배포와 호환성
 
 - 공개 CI는 GitHub-hosted runner만 사용하며 조직 ARC와 비밀 값에 의존하지 않는다.
-- GoReleaser는 `imprun` 하나만 담은 OS/아키텍처별 휴대형 아카이브를 만든다.
+- GoReleaser는 OS/아키텍처별 휴대형 아카이브와 WinGet이 바로 설치할 수 있는
+  Windows amd64/arm64 단일 `imprun.exe` 자산을 함께 만든다.
 - 체크섬과 키 없는 Cosign 서명을 검증한 자산만 설치 경로에 사용한다.
 - Windows 패키지 ID는 `Imprun.CLI`다.
 - Cloud와 Identity가 새 클라이언트를 수용하고 실제 Cell E2E가 통과하기 전에는

@@ -61,10 +61,11 @@ jobs:
             --pattern checksums.txt \
             --pattern checksums.txt.sigstore.json \
             --pattern 'imprun_*.tar.gz' \
-            --pattern 'imprun_*.zip'
+            --pattern 'imprun_*.zip' \
+            --pattern 'imprun_*.exe'
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.1.2
-      - name: Verify signature, checksums, and archives
+      - name: Verify signature, checksums, and packages
         shell: bash
         run: |
           set -euo pipefail
@@ -73,7 +74,8 @@ jobs:
             --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/tags/${GITHUB_REF_NAME}" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             checksums.txt
-          test "$(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)" -eq 6
+          test "$(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.exe' \) | wc -l)" -eq 8
+          test "$(find . -maxdepth 1 -type f -name 'imprun_*_windows_*.exe' | wc -l)" -eq 2
           sha256sum --check checksums.txt
           expected="$(printf '%s\n' LICENSE README.md imprun | LC_ALL=C sort)"
           expected_windows="$(printf '%s\n' LICENSE README.md imprun.exe | LC_ALL=C sort)"
@@ -130,14 +132,13 @@ jobs:
         run: |
           gh release download "${env:GITHUB_REF_NAME}" `
             --repo "${env:GITHUB_REPOSITORY}" `
-            --pattern "imprun_*_windows_amd64.zip"
-          $archive = Get-ChildItem -File -Filter "imprun_*_windows_amd64.zip" | Select-Object -First 1
-          if (-not $archive) {
-            throw "published Windows archive is missing"
+            --pattern "imprun_*_windows_amd64.exe"
+          $executable = Get-ChildItem -File -Filter "imprun_*_windows_amd64.exe" | Select-Object -First 1
+          if (-not $executable) {
+            throw "published Windows executable is missing"
           }
-          Expand-Archive -LiteralPath $archive.FullName -DestinationPath "${env:RUNNER_TEMP}\imprun-smoke"
-          & "${env:RUNNER_TEMP}\imprun-smoke\imprun.exe" --version
-          $completion = & "${env:RUNNER_TEMP}\imprun-smoke\imprun.exe" completion powershell
+          & $executable.FullName --version
+          $completion = & $executable.FullName completion powershell
           if (($completion -join "`n") -notmatch "Register-ArgumentCompleter") {
             throw "PowerShell completion smoke failed"
           }
