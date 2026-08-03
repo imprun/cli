@@ -18,6 +18,11 @@ build:
 
 test:
 	go test ./...
+ifeq ($(OS),Windows_NT)
+	python scripts/test_installers.py
+else
+	python3 scripts/test_installers.py
+endif
 
 snapshot:
 	goreleaser release --snapshot --clean

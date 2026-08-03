@@ -60,6 +60,8 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --pattern checksums.txt \
             --pattern checksums.txt.sigstore.json \
+            --pattern install.sh \
+            --pattern install.ps1 \
             --pattern 'imprun_*.tar.gz' \
             --pattern 'imprun_*.zip' \
             --pattern 'imprun_*.exe'
@@ -76,6 +78,9 @@ jobs:
             checksums.txt
           test "$(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.exe' \) | wc -l)" -eq 8
           test "$(find . -maxdepth 1 -type f -name 'imprun_*_windows_*.exe' | wc -l)" -eq 2
+          test -f install.sh
+          test -f install.ps1
+          test "$(wc -l < checksums.txt)" -eq 10
           sha256sum --check checksums.txt
           expected="$(printf '%s\n' LICENSE README.md imprun | LC_ALL=C sort)"
           expected_windows="$(printf '%s\n' LICENSE README.md imprun.exe | LC_ALL=C sort)"
@@ -100,6 +105,8 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
       - name: Download and smoke-test published CLI
         if: runner.os != 'Windows'
         shell: bash
@@ -108,20 +115,20 @@ jobs:
         run: |
           set -euo pipefail
           if test "${RUNNER_OS}" = "macOS"; then
-            platform=darwin
             completion=zsh
             marker=compdef
           else
-            platform=linux
             completion=bash
             marker=complete
           fi
           gh release download "${GITHUB_REF_NAME}" \
             --repo "${GITHUB_REPOSITORY}" \
-            --pattern "imprun_*_${platform}_amd64.tar.gz"
-          archive="$(find . -maxdepth 1 -type f -name "imprun_*_${platform}_amd64.tar.gz" -print -quit)"
-          mkdir -p "${RUNNER_TEMP}/imprun-smoke"
-          tar -xzf "${archive}" -C "${RUNNER_TEMP}/imprun-smoke"
+            --pattern install.sh
+          chmod 0755 install.sh
+          IMPRUN_VERSION="${GITHUB_REF_NAME}" \
+          IMPRUN_INSTALL_DIR="${RUNNER_TEMP}/imprun-smoke" \
+          IMPRUN_REQUIRE_SIGNATURE=1 \
+            ./install.sh
           "${RUNNER_TEMP}/imprun-smoke/imprun" --version
           "${RUNNER_TEMP}/imprun-smoke/imprun" completion "${completion}" | grep -q "${marker}"
       - name: Download and smoke-test published CLI
@@ -132,13 +139,15 @@ jobs:
         run: |
           gh release download "${env:GITHUB_REF_NAME}" `
             --repo "${env:GITHUB_REPOSITORY}" `
-            --pattern "imprun_*_windows_amd64.exe"
-          $executable = Get-ChildItem -File -Filter "imprun_*_windows_amd64.exe" | Select-Object -First 1
-          if (-not $executable) {
-            throw "published Windows executable is missing"
-          }
-          & $executable.FullName --version
-          $completion = & $executable.FullName completion powershell
+            --pattern install.ps1
+          .\install.ps1 `
+            -Version "${env:GITHUB_REF_NAME}" `
+            -InstallDir "${env:RUNNER_TEMP}\imprun-smoke" `
+            -NoModifyPath `
+            -RequireSignature
+          $installed = "${env:RUNNER_TEMP}\imprun-smoke\imprun.exe"
+          & $installed --version
+          $completion = & $installed completion powershell
           if (($completion -join "`n") -notmatch "Register-ArgumentCompleter") {
             throw "PowerShell completion smoke failed"
           }
