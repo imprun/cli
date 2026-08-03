@@ -120,11 +120,17 @@ def installer_command(install_dir: Path, release_root: Path, version: str) -> li
 
 
 def run_installer(
-    install_dir: Path, release_root: Path, fake_bin: Path, version: str = VERSION
+    install_dir: Path,
+    release_root: Path,
+    fake_bin: Path,
+    version: str = VERSION,
+    environment_overrides: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["PATH"] = str(fake_bin) + os.pathsep + environment["PATH"]
     environment["IMPRUN_RELEASE_BASE_URL"] = release_root.as_uri()
+    if environment_overrides:
+        environment.update(environment_overrides)
     return subprocess.run(
         installer_command(install_dir, release_root, version),
         cwd=ROOT,
@@ -178,6 +184,34 @@ def main() -> None:
         write_fake_cosign(fake_bin, succeeds=True)
         success = run_installer(install_dir, release_root, fake_bin)
         require_success(success, "installer success case")
+
+        if target_os == "windows":
+            installer_source = (ROOT / "install.ps1").read_text(encoding="utf-8")
+            if "::OSArchitecture" in installer_source:
+                raise AssertionError("Windows installer requires RuntimeInformation.OSArchitecture")
+            native_architecture = {"amd64": "AMD64", "arm64": "ARM64"}[architecture]
+            emulated_install_dir = test_root / "emulated process install"
+            emulated = run_installer(
+                emulated_install_dir,
+                release_root,
+                fake_bin,
+                environment_overrides={
+                    "PROCESSOR_ARCHITECTURE": "x86",
+                    "PROCESSOR_ARCHITEW6432": native_architecture,
+                },
+            )
+            require_success(emulated, "emulated-process architecture detection")
+            missing_architecture = run_installer(
+                test_root / "missing architecture install",
+                release_root,
+                fake_bin,
+                environment_overrides={
+                    "PROCESSOR_ARCHITECTURE": "",
+                    "PROCESSOR_ARCHITEW6432": "",
+                },
+            )
+            if missing_architecture.returncode == 0:
+                raise AssertionError("missing Windows architecture was accepted")
 
         version_result = subprocess.run(
             [str(installed), "--version"],

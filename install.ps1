@@ -74,10 +74,16 @@ if (-not $versionMatch.Success) {
 $Version = $versionMatch.Groups['version'].Value
 $tag = "v$Version"
 
-$runtimeArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
-switch ($runtimeArchitecture) {
-    "X64" { $architecture = "amd64" }
-    "Arm64" { $architecture = "arm64" }
+$runtimeArchitecture = $env:PROCESSOR_ARCHITEW6432
+if ([string]::IsNullOrWhiteSpace($runtimeArchitecture)) {
+    $runtimeArchitecture = $env:PROCESSOR_ARCHITECTURE
+}
+if ([string]::IsNullOrWhiteSpace($runtimeArchitecture)) {
+    throw "Could not determine the Windows architecture"
+}
+switch ($runtimeArchitecture.ToUpperInvariant()) {
+    "AMD64" { $architecture = "amd64" }
+    "ARM64" { $architecture = "arm64" }
     default { throw "Unsupported Windows architecture: $runtimeArchitecture" }
 }
 

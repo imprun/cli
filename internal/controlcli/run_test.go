@@ -111,6 +111,14 @@ func TestRunSourceDeployConfirmsRelease(t *testing.T) {
 	}
 }
 
+func TestImprunNoArgumentsPrintsHelpAndSucceeds(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	exit := RunImprun(nil, strings.NewReader(""), &stdout, &stderr)
+	if exit != ExitOK || !strings.Contains(stdout.String(), "imprun [global flags] <command>") || stderr.Len() != 0 {
+		t.Fatalf("exit=%d stdout=%s stderr=%s", exit, stdout.String(), stderr.String())
+	}
+}
+
 func TestRunRejectsUnexpectedArgumentsBeforeRequest(t *testing.T) {
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
