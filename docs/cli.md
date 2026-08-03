@@ -11,6 +11,36 @@ The client exposes high-level app, release, and Run workflows together with the 
 
 Tagged releases contain `imprun` archives for Windows, macOS, and Linux on amd64 and arm64. Windows releases also publish direct portable `.exe` assets for package managers. These are operator-host binaries and are unrelated to the architecture of a Kubernetes Cell image.
 
+The standalone installers select the current operating system and architecture, resolve the latest stable release unless a version is pinned, verify the downloaded asset's SHA-256, and replace the installed executable only after its version smoke test succeeds. They never install a server, worker, service, or credential.
+
+Windows PowerShell installs to `%LOCALAPPDATA%\Programs\Imprun\bin` and adds that directory to the user `PATH` when necessary:
+
+```powershell
+irm https://github.com/imprun/cli/releases/latest/download/install.ps1 | iex
+```
+
+Linux and macOS install to `${XDG_BIN_HOME:-$HOME/.local/bin}` without modifying shell profiles:
+
+```shell
+curl -fsSL https://github.com/imprun/cli/releases/latest/download/install.sh | sh
+```
+
+Both installers automatically verify the keyless Sigstore bundle when `cosign` is available. Without `cosign`, they still require a unique matching SHA-256 entry and print that signer verification was skipped. For a fail-closed signed installation, inspect the script first and require `cosign` verification:
+
+```powershell
+irm https://github.com/imprun/cli/releases/latest/download/install.ps1 -OutFile install.ps1
+Get-Content .\install.ps1
+.\install.ps1 -Version 0.3.1 -RequireSignature
+```
+
+```shell
+curl -fsSLO https://github.com/imprun/cli/releases/latest/download/install.sh
+less install.sh
+sh install.sh --version 0.3.1 --require-signature
+```
+
+Use `-InstallDir` and `-NoModifyPath` on Windows, or `--install-dir` on Linux/macOS, for an explicit location. The equivalent environment variables are `IMPRUN_VERSION`, `IMPRUN_INSTALL_DIR`, `IMPRUN_NO_MODIFY_PATH=1`, and `IMPRUN_REQUIRE_SIGNATURE=1`.
+
 After the stable package is accepted into the Windows Package Manager community repository, install or upgrade it with:
 
 ```powershell
@@ -18,23 +48,7 @@ winget install --id Imprun.CLI --exact
 winget upgrade --id Imprun.CLI --exact
 ```
 
-Until then, or for a pinned manual installation, download the matching direct Windows executable and place it on `PATH`:
-
-```powershell
-New-Item -ItemType Directory -Force .\imprun | Out-Null
-Copy-Item .\imprun_<VERSION>_windows_amd64.exe .\imprun\imprun.exe
-.\imprun\imprun.exe --version
-```
-
-On macOS or Linux, extract the matching archive and install the executable in a directory on `PATH`:
-
-```shell
-tar -xzf imprun_<VERSION>_<OS>_<ARCH>.tar.gz
-install -m 0755 imprun "$HOME/.local/bin/imprun"
-imprun --version
-```
-
-Each release includes `checksums.txt` and a keyless Sigstore bundle named `checksums.txt.sigstore.json`. Verify the signer and checksum before installing:
+For a manual installation, download the matching release asset together with `checksums.txt` and `checksums.txt.sigstore.json`. Verify the signer and checksum before placing the executable on `PATH`:
 
 ```shell
 cosign verify-blob \
@@ -45,26 +59,20 @@ cosign verify-blob \
 sha256sum --check --ignore-missing checksums.txt
 ```
 
+Then extract the selected macOS/Linux archive or stage the Windows `.exe`, run `--version`, and move it into an executable directory on `PATH`.
+
 ## Upgrade
 
-Download and verify the new release exactly as for a fresh installation. Check the staged binary before replacing the installed executable:
+Rerun the standalone installer to upgrade. It stages and verifies the new executable before replacing the installed file, while keeping configuration and credentials outside the installation directory:
 
 ```powershell
-$stagedExecutable = ".\imprun_<NEW_VERSION>_windows_amd64.exe"
-& $stagedExecutable --version
-$installedDirectory = "C:\Tools\imprun"
-Copy-Item $stagedExecutable "$installedDirectory\imprun.exe.new"
-& "$installedDirectory\imprun.exe.new" --version
-Move-Item -Force "$installedDirectory\imprun.exe.new" "$installedDirectory\imprun.exe"
+irm https://github.com/imprun/cli/releases/latest/download/install.ps1 | iex
 imprun --version
 imprun context show
 ```
 
 ```shell
-tar -xzf "imprun_<NEW_VERSION>_<OS>_<ARCH>.tar.gz"
-./imprun --version
-install -m 0755 imprun "$HOME/.local/bin/imprun.new"
-mv "$HOME/.local/bin/imprun.new" "$HOME/.local/bin/imprun"
+curl -fsSL https://github.com/imprun/cli/releases/latest/download/install.sh | sh
 imprun --version
 imprun context show
 ```

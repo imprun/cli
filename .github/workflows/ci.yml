@@ -23,6 +23,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
       - name: Verify formatting
         run: |
           go fmt ./...
@@ -35,6 +38,8 @@ jobs:
         run: |
           "${RUNNER_TEMP}/imprun" --version
           "${RUNNER_TEMP}/imprun" completion bash | grep -q "complete"
+      - name: Test installer
+        run: python3 scripts/test_installers.py
 
   windows:
     name: windows
@@ -46,6 +51,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
       - name: Test
         run: go test ./...
       - name: Build and smoke
@@ -57,6 +65,8 @@ jobs:
           if (($completion -join "`n") -notmatch "Register-ArgumentCompleter") {
             throw "PowerShell completion smoke failed"
           }
+      - name: Test installer
+        run: python scripts/test_installers.py
 
   macos:
     name: macOS
@@ -68,6 +78,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
       - name: Test
         run: go test ./...
       - name: Build and smoke
@@ -75,6 +88,8 @@ jobs:
           go build -trimpath -o "${RUNNER_TEMP}/imprun" ./cmd/imprun
           "${RUNNER_TEMP}/imprun" --version
           "${RUNNER_TEMP}/imprun" completion zsh | grep -q "compdef"
+      - name: Test installer
+        run: python3 scripts/test_installers.py
 
   release-snapshot:
     name: release snapshot
@@ -98,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(find dist -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)" -eq 6
-          test "$(wc -l < dist/checksums.txt)" -eq 8
+          test "$(wc -l < dist/checksums.txt)" -eq 10
           grep -E '\.(tar\.gz|zip)$' dist/checksums.txt | (
             cd dist
             sha256sum --check -
@@ -119,6 +134,11 @@ jobs:
             expected_hash="$(awk -v name="${name}" '$2 == name { print $1 }' dist/checksums.txt)"
             test -n "${expected_hash}"
             test "$(sha256sum "${path}" | cut -d ' ' -f 1)" = "${expected_hash}"
+          done
+          for installer in install.sh install.ps1; do
+            expected_hash="$(awk -v name="${installer}" '$2 == name { print $1 }' dist/checksums.txt)"
+            test -n "${expected_hash}"
+            test "$(sha256sum "${installer}" | cut -d ' ' -f 1)" = "${expected_hash}"
           done
           expected="$(printf '%s\n' LICENSE README.md imprun | LC_ALL=C sort)"
           expected_windows="$(printf '%s\n' LICENSE README.md imprun.exe | LC_ALL=C sort)"
