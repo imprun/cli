@@ -131,8 +131,8 @@ func runWithProgramDependencies(
 		return ExitOK
 	}
 	if len(remaining) == 0 {
-		printUsage(stderr, program.Name)
-		return ExitUsage
+		printUsage(stdout, program.Name)
+		return ExitOK
 	}
 	if jqExpression != "" && outputTemplate != "" {
 		writeError(stderr, usageError{"--jq and --template are mutually exclusive"})
