@@ -193,6 +193,24 @@ USAGE
   imprun job result <job-id>
   imprun job logs <job-id> [--tail-bytes n]
   imprun job cancel <job-id> [--reason text]`,
+	"human-task": `Submit HumanTask decisions.
+
+USAGE
+  imprun human-task decide <task-id> --outcome submit|cancel [flags]`,
+	"human-task decide": `Submit or cancel one pending HumanTask.
+
+The command always sends an Idempotency-Key. A cryptographically random key is
+generated when --idempotency-key is omitted. Decision values are sent only to
+the selected Cell and are not printed by the CLI.
+
+USAGE
+  imprun human-task decide <task-id> --outcome submit|cancel [flags]
+
+FLAGS
+  --outcome string          submit or cancel
+  --value string            JSON decision value for submit (default "null")
+  --value-file string       JSON decision value file, or - for standard input
+  --idempotency-key string  Principal-scoped idempotency key; generated when omitted`,
 	"action": `Inspect an app action and its schemas.
 
 USAGE

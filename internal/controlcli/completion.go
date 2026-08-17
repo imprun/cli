@@ -7,7 +7,7 @@ import (
 )
 
 var imprunCompletionCommands = map[string][]string{
-	"":             {"auth", "context", "workspace", "source", "app", "release", "action", "run", "job", "provisioning", "api", "openapi", "completion", "version", "help"},
+	"":             {"auth", "context", "workspace", "source", "app", "release", "action", "run", "job", "human-task", "provisioning", "api", "openapi", "completion", "version", "help"},
 	"auth":         {"login", "switch", "status", "logout"},
 	"context":      {"list", "show", "set", "use", "delete"},
 	"workspace":    {"list", "show", "view", "use"},
@@ -17,6 +17,7 @@ var imprunCompletionCommands = map[string][]string{
 	"action":       {"show", "schema"},
 	"run":          {"create", "wait", "show", "view", "watch", "result", "cancel"},
 	"job":          {"list", "show", "result", "logs", "cancel"},
+	"human-task":   {"decide"},
 	"provisioning": {"export", "apply"},
 }
 
