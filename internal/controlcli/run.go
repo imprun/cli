@@ -288,6 +288,8 @@ func (r *runner) command(args []string) error {
 		return r.run(args[1:])
 	case "job":
 		return r.job(args[1:])
+	case "human-task":
+		return r.humanTask(args[1:])
 	case "provisioning":
 		return r.provisioning(args[1:])
 	case "api":
@@ -529,6 +531,7 @@ COMMANDS
   action show|schema
   run create|wait|show|watch|result|cancel
   job list|show|result|logs|cancel
+  human-task decide
   provisioning export|apply
   api
   openapi

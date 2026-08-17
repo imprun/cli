@@ -305,9 +305,12 @@ imprun run cancel <RUN_ID> --reason "operator request"
 imprun job list --app example --status running
 imprun job show <JOB_ID>
 imprun job logs <JOB_ID> --tail-bytes 65536
+
+imprun human-task decide <TASK_ID> --outcome submit --value-file decision.json
+imprun human-task decide <TASK_ID> --outcome cancel
 ```
 
-`--input-file -` reads JSON from standard input. Job logs are written as the raw response so they can be piped.
+`--input-file -` and `--value-file -` read JSON from standard input. Job logs are written as the raw response so they can be piped. `human-task decide` generates and sends the required `Idempotency-Key` when one is not supplied; it never prints the decision value.
 
 `imprun run watch` prints state changes to standard error, polls no faster than 100 ms, and prints the terminal Run or successful result to standard output. Its default timeout is ten minutes.
 
